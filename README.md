@@ -18,7 +18,7 @@ This is a small click assistant for Minecraft PvP 1.8.9. It helps with abusing a
 - Chance % – The probability that a double click will occur.
 - Min CPS – The minimum CPS required before double clicks can be triggered. This prevents double clicks from occurring during normal clicking.
 
-## Abuse Mode
+### Abuse Mode
 
 ### Left Abuse
 
