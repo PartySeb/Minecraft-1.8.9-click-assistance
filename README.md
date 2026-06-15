@@ -28,35 +28,53 @@ es klappt nur wenn man auf der linken seite des blockes schaut und man weit mit 
 ist mehr als test gedacht gewesen 
 
 
-Function
-Double Click Settings
-Left Click
-Enabled / Disabled – Turns left-click double clicking on or off.
-Chance % – The probability that a double click will occur.
-Min CPS – The minimum CPS (Clicks Per Second) required before double clicks can be triggered. This prevents double clicks from occurring during normal clicking.
-Right Click
-Enabled / Disabled – Turns right-click double clicking on or off.
-Chance % – The probability that a double click will occur.
-Min CPS – The minimum CPS required before double clicks can be triggered. This prevents double clicks from occurring during normal clicking.
-Abuse Mode
-Left Abuse
-Enabled / Disabled – Turns Left Abuse on or off.
-Extra % – The amount of additional double clicks that can occur.
-Duration (s) – The amount of time before Abuse Mode automatically disables itself. Abuse Mode is not intended to run indefinitely.
-Time (ms) – If Abuse Mode is triggered by a double click, this determines how much time can pass between clicks for the second click to activate Abuse Mode.
-Speed %
-0% = 25–35 CPS
-100% = 40–50 CPS
-Controls how many clicks are generated.
-Trigger
-If you cannot perform a double click to activate Abuse Mode, you can assign a keybind instead.
-Godbridging
-Enabled / Disabled
-Turns Godbridging mode on or off.
-Start / Stop
-Starts or stops the feature.
-Notes
-Works only when looking at the left side of a block.
-You must aim relatively high with your crosshair.
-Success rate is roughly 60%, so it is not guaranteed to work consistently.
-This feature was mainly created as a test and should be considered experimental.
+# Minecraft-1.8.9-Click-Assistance
+
+This is a small click assistant for Minecraft PvP 1.8.9. It helps with abusing and double-clicking, and it includes a God Bridging macro.
+
+# Function
+
+## Double Click Settings
+
+### Left Click
+
+- Enabled / Disabled
+- Chance % – The probability that a double click will occur.
+- Min CPS – The minimum CPS required before double clicks can be triggered. This prevents double clicks from occurring during normal clicking.
+
+### Right Click
+
+- Enabled / Disabled
+- Chance % – The probability that a double click will occur.
+- Min CPS – The minimum CPS required before double clicks can be triggered. This prevents double clicks from occurring during normal clicking.
+
+## Abuse Mode
+
+### Left Abuse
+
+- Enabled / Disabled
+- Extra % – Controls how many additional double clicks can occur.
+- Duration (s) – The time before Abuse Mode automatically disables itself.
+- Time (ms) – If Abuse Mode is activated by a double click, this determines how long the second click can take to still trigger the abuse.
+- Speed %
+  - 0% = 25–35 CPS
+  - 100% = 40–50 CPS
+  - Controls how many clicks are generated.
+
+### Trigger
+
+- If you cannot activate Abuse Mode with a double click, you can assign a keybind instead.
+
+## God Bridging
+
+### Controls
+
+- Enabled / Disabled
+- Start / Stop
+
+### Notes
+
+- Works only when looking at the left side of a block.
+- You must aim relatively high with your crosshair.
+- Success rate is roughly 60%, so it is not guaranteed to work consistently.
+- This feature was mainly created for testing purposes and should be considered experimental.
