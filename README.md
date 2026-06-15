@@ -4,7 +4,7 @@ This is a small click assistant for Minecraft PvP 1.8.9. It helps with abusing a
 
 # Function
 
-## Double Click Settings
+### Double Click Settings
 
 ### Left Click
 
