@@ -1,0 +1,1349 @@
+#Requires AutoHotkey v2
+#SingleInstance Force
+
+; ==============================
+; ===== SETTINGS & VARS ========
+; ==============================
+CPS_LIMIT_L := 6
+DOUBLE_CHANCE_L := 30
+CPS_LIMIT_R := 5
+DOUBLE_CHANCE_R := 20
+enableL := true
+enableR := true
+clickTimesL := []
+clickTimesR := []
+abuseEnableL := false 
+abuseEnableR := false 
+R_DOUBLE_CLICK_TIME := 100
+R_HOLD_THRESHOLD    := 10
+R_ABUSE_DURATION    := 3000 
+R_CLICK_INTERVAL_MIN := 25
+R_CLICK_INTERVAL_MAX := 45
+R_EXTRA_CLICK_CHANCE := 30 
+R_lastClickTime := 5
+R_abuseRunning := false
+L_DOUBLE_CLICK_TIME := 100
+L_HOLD_THRESHOLD    := 10
+L_ABUSE_DURATION    := 3000 
+L_CLICK_INTERVAL_MIN := 25
+L_CLICK_INTERVAL_MAX := 45
+L_EXTRA_CLICK_CHANCE := 30 
+L_lastClickTime := 0
+L_abuseRunning := false
+
+; FIX: Own flags instead of GetKeyState polling
+global L_mouseDown := false
+global R_mouseDown := false
+
+; Abuse "Speed" slider (0-100%) -> maps to CLICK_INTERVAL_MIN/MAX
+L_ABUSE_SPEED := 0
+R_ABUSE_SPEED := 0
+
+; Custom trigger keys for Abuse Mode (keyboard or mouse side buttons)
+global L_triggerKey := ""
+global R_triggerKey := ""
+global L_keyHeld := false
+global R_keyHeld := false
+global capturingFor := ""
+
+; List of keys/mouse buttons recognized by the Trigger boxes
+global CaptureCandidates := [
+    "MButton","XButton1","XButton2"
+    ,"Space","Enter","Tab","Escape","Backspace","Delete","Insert","Home","End","PgUp","PgDn"
+    ,"Up","Down","Left","Right"
+    ,"CapsLock","LShift","RShift","LControl","RControl","LAlt","RAlt","LWin","RWin"
+    ,"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"
+    ,"Numpad0","Numpad1","Numpad2","Numpad3","Numpad4","Numpad5","Numpad6","Numpad7","Numpad8","Numpad9"
+    ,"NumpadAdd","NumpadSub","NumpadMult","NumpadDiv","NumpadEnter","NumpadDot"
+    ,"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"
+    ,"0","1","2","3","4","5","6","7","8","9"
+]
+
+; Godbridging vars
+global gbEnabled := false
+global gbRunning := false
+global gbStartKey := "b"
+global gbStopKey := "^b" ; ^ = Ctrl
+
+; ==============================
+; ===== GUI CREATION ===========
+; ==============================
+overlay := Gui("+AlwaysOnTop -MaximizeBox", "Ultra Click Overlay V4.8")
+overlay.BackColor := "1A1A1A"
+overlay.SetFont("s9 cWhite", "Segoe UI")
+
+EditStyle := "Center Background252525 cWhite -E0x200"
+
+overlay.SetFont("s10 Bold c00FFFF")
+overlay.Add("Text", "x10 y10 w380", "--- DOUBLE CLICK SETTINGS ---")
+btnHide := overlay.Add("Button", "x400 y8 w80 h22", "Hide")
+btnHide.SetFont("s8 Norm")
+overlay.SetFont("s9 Norm cWhite")
+
+; --- SECTION: DOUBLE CLICKS ---
+overlay.Add("GroupBox", "x10 y35 w235 h125", "Left Click")
+chkL := overlay.Add("Checkbox", "x20 y55 Checked", "Active")
+overlay.Add("Text", "x20 y85", "Chance %:")
+sliderL := overlay.Add("Slider", "x85 y85 w110 Range0-100 ToolTip", DOUBLE_CHANCE_L)
+editL := overlay.Add("Edit", "x200 y83 w35 h20 " EditStyle, DOUBLE_CHANCE_L)
+overlay.Add("Text", "x20 y115", "Min CPS:")
+sliderCpsL := overlay.Add("Slider", "x85 y115 w110 Range1-20 ToolTip", CPS_LIMIT_L)
+editCpsL := overlay.Add("Edit", "x200 y113 w35 h20 " EditStyle, CPS_LIMIT_L)
+
+overlay.Add("GroupBox", "x255 y35 w235 h125", "Right Click")
+chkR := overlay.Add("Checkbox", "x265 y55 Checked", "Active")
+overlay.Add("Text", "x265 y85", "Chance %:")
+sliderR := overlay.Add("Slider", "x330 y85 w110 Range0-100 ToolTip", DOUBLE_CHANCE_R)
+editR := overlay.Add("Edit", "x445 y83 w35 h20 " EditStyle, DOUBLE_CHANCE_R)
+overlay.Add("Text", "x265 y115", "Min CPS:")
+sliderCpsR := overlay.Add("Slider", "x330 y115 w110 Range1-20 ToolTip", CPS_LIMIT_R)
+editCpsR := overlay.Add("Edit", "x445 y113 w35 h20 " EditStyle, CPS_LIMIT_R)
+
+; --- SECTION: ABUSE MODE ---
+overlay.SetFont("s10 Bold cRed")
+overlay.Add("Text", "x10 y170 w480 Center", "=== ABUSE MODE (HOLD) ===")
+overlay.SetFont("s9 Norm cWhite")
+
+overlay.Add("GroupBox", "x10 y195 w235 h205", "Left Abuse")
+chkAbuseL := overlay.Add("Checkbox", "x20 y215", "Active")
+overlay.Add("Text", "x20 y240", "Extra %:")
+sliderAbuseChanceL := overlay.Add("Slider", "x80 y240 w110 Range0-100 ToolTip", L_EXTRA_CLICK_CHANCE)
+editAbuseChanceL := overlay.Add("Edit", "x200 y238 w35 h20 " EditStyle, L_EXTRA_CLICK_CHANCE)
+overlay.Add("Text", "x20 y270", "Duration(s):")
+sliderDurL := overlay.Add("Slider", "x80 y270 w110 Range1-10 ToolTip", L_ABUSE_DURATION/1000)
+editDurL := overlay.Add("Edit", "x200 y268 w35 h20 " EditStyle, L_ABUSE_DURATION/1000)
+overlay.Add("Text", "x20 y300", "Time(ms):")
+sliderDcTimeL := overlay.Add("Slider", "x80 y300 w110 Range50-500 ToolTip", L_DOUBLE_CLICK_TIME)
+editDcTimeL := overlay.Add("Edit", "x200 y298 w35 h20 " EditStyle, L_DOUBLE_CLICK_TIME)
+overlay.Add("Text", "x20 y330", "Speed %:")
+sliderSpeedL := overlay.Add("Slider", "x80 y330 w110 Range0-100 ToolTip", L_ABUSE_SPEED)
+editSpeedL := overlay.Add("Edit", "x200 y328 w35 h20 " EditStyle, L_ABUSE_SPEED)
+overlay.Add("Text", "x20 y362", "Trigger:")
+editTriggerL := overlay.Add("Edit", "x80 y360 w110 h20 ReadOnly " EditStyle, "Keine")
+btnTriggerResetL := overlay.Add("Button", "x195 y360 w40 h20", "Reset")
+btnTriggerResetL.SetFont("s8 Norm")
+
+overlay.Add("GroupBox", "x255 y195 w235 h205", "Right Abuse")
+chkAbuseR := overlay.Add("Checkbox", "x265 y215", "Active")
+overlay.Add("Text", "x265 y240", "Extra %:")
+sliderAbuseChanceR := overlay.Add("Slider", "x325 y240 w110 Range0-100 ToolTip", R_EXTRA_CLICK_CHANCE)
+editAbuseChanceR := overlay.Add("Edit", "x445 y238 w35 h20 " EditStyle, R_EXTRA_CLICK_CHANCE)
+overlay.Add("Text", "x265 y270", "Duration(s):")
+sliderDurR := overlay.Add("Slider", "x325 y270 w110 Range1-10 ToolTip", R_ABUSE_DURATION/1000)
+editDurR := overlay.Add("Edit", "x445 y268 w35 h20 " EditStyle, R_ABUSE_DURATION/1000)
+overlay.Add("Text", "x265 y300", "Time(ms):")
+sliderDcTimeR := overlay.Add("Slider", "x325 y300 w110 Range50-500 ToolTip", R_DOUBLE_CLICK_TIME)
+editDcTimeR := overlay.Add("Edit", "x445 y298 w35 h20 " EditStyle, R_DOUBLE_CLICK_TIME)
+overlay.Add("Text", "x265 y330", "Speed %:")
+sliderSpeedR := overlay.Add("Slider", "x325 y330 w110 Range0-100 ToolTip", R_ABUSE_SPEED)
+editSpeedR := overlay.Add("Edit", "x445 y328 w35 h20 " EditStyle, R_ABUSE_SPEED)
+overlay.Add("Text", "x265 y362", "Trigger:")
+editTriggerR := overlay.Add("Edit", "x325 y360 w110 h20 ReadOnly " EditStyle, "Keine")
+btnTriggerResetR := overlay.Add("Button", "x440 y360 w40 h20", "Reset")
+btnTriggerResetR.SetFont("s8 Norm")
+
+; --- SECTION: GODBRIDGING ---
+overlay.SetFont("s10 Bold cEE82EE")
+overlay.Add("Text", "x10 y410 w480 Center", "=== GODBRIDGING ===")
+overlay.SetFont("s9 Norm cWhite")
+
+overlay.Add("GroupBox", "x10 y430 w480 h55", "Macro Settings")
+chkGB := overlay.Add("Checkbox", "x20 y450", "Active")
+overlay.Add("Text", "x100 y450", "Start:")
+hkGBStart := overlay.Add("Hotkey", "x140 y448 w80", gbStartKey)
+overlay.Add("Text", "x250 y450", "Stop Macro:")
+hkGBStop := overlay.Add("Hotkey", "x330 y448 w100", gbStopKey)
+
+overlay.Show("w500 h505")
+
+; ==============================
+; ===== GUI LOGIC & EVENTS =====
+; ==============================
+
+HideGui(*) {
+    overlay.Opt("+Owner")
+    overlay.Hide()
+}
+btnHide.OnEvent("Click", HideGui)
+
+RestoreGui(*) {
+    overlay.Opt("-Owner")
+    overlay.Show()
+}
+
+A_TrayMenu.Add("Restore", RestoreGui) 
+A_TrayMenu.Default := "Restore"        
+A_TrayMenu.ClickCount := 2                      
+
+UpdateEnableL(*) {
+    global enableL := chkL.Value
+}
+chkL.OnEvent("Click", UpdateEnableL)
+
+UpdateEnableR(*) {
+    global enableR := chkR.Value
+}
+chkR.OnEvent("Click", UpdateEnableR)
+
+UpdateAbuseEnableL(*) {
+    global abuseEnableL := chkAbuseL.Value
+}
+chkAbuseL.OnEvent("Click", UpdateAbuseEnableL)
+
+UpdateAbuseEnableR(*) {
+    global abuseEnableR := chkAbuseR.Value
+}
+chkAbuseR.OnEvent("Click", UpdateAbuseEnableR)
+
+UpdateGBEnable(*) {
+    global gbEnabled := chkGB.Value
+    ToggleGBHotkeys()
+}
+chkGB.OnEvent("Click", UpdateGBEnable)
+
+UpdateGBStartKey(*) {
+    global gbStartKey
+    if (gbStartKey != "")
+        try Hotkey(gbStartKey, RunGodbridging, "Off")
+    gbStartKey := hkGBStart.Value
+    ToggleGBHotkeys()
+}
+hkGBStart.OnEvent("Change", UpdateGBStartKey)
+
+UpdateGBStopKey(*) {
+    global gbStopKey
+    if (gbStopKey != "")
+        try Hotkey(gbStopKey, StopGodbridging, "Off")
+    gbStopKey := hkGBStop.Value
+    ToggleGBHotkeys()
+}
+hkGBStop.OnEvent("Change", UpdateGBStopKey)
+
+ToggleGBHotkeys() {
+    global gbEnabled, gbStartKey, gbStopKey
+    if (gbEnabled) {
+        if (gbStartKey != "")
+            try Hotkey(gbStartKey, RunGodbridging, "On")
+        if (gbStopKey != "")
+            try Hotkey(gbStopKey, StopGodbridging, "On")
+    } else {
+        if (gbStartKey != "")
+            try Hotkey(gbStartKey, RunGodbridging, "Off")
+        if (gbStopKey != "")
+            try Hotkey(gbStopKey, StopGodbridging, "Off")
+    }
+}
+
+UpdateL_S(*) {
+    global DOUBLE_CHANCE_L := sliderL.Value
+    editL.Value := sliderL.Value
+}
+sliderL.OnEvent("Change", UpdateL_S)
+
+UpdateR_S(*) {
+    global DOUBLE_CHANCE_R := sliderR.Value
+    editR.Value := sliderR.Value
+}
+sliderR.OnEvent("Change", UpdateR_S)
+
+UpdateCpsL_S(*) {
+    global CPS_LIMIT_L := sliderCpsL.Value
+    editCpsL.Value := sliderCpsL.Value
+}
+sliderCpsL.OnEvent("Change", UpdateCpsL_S)
+
+UpdateCpsR_S(*) {
+    global CPS_LIMIT_R := sliderCpsR.Value
+    editCpsR.Value := sliderCpsR.Value
+}
+sliderCpsR.OnEvent("Change", UpdateCpsR_S)
+
+UpdateAbL_S(*) {
+    global L_EXTRA_CLICK_CHANCE := sliderAbuseChanceL.Value
+    editAbuseChanceL.Value := sliderAbuseChanceL.Value
+}
+sliderAbuseChanceL.OnEvent("Change", UpdateAbL_S)
+
+UpdateAbR_S(*) {
+    global R_EXTRA_CLICK_CHANCE := sliderAbuseChanceR.Value
+    editAbuseChanceR.Value := sliderAbuseChanceR.Value
+}
+sliderAbuseChanceR.OnEvent("Change", UpdateAbR_S)
+
+UpdateDurL_S(*) {
+    global L_ABUSE_DURATION := sliderDurL.Value * 1000
+    editDurL.Value := sliderDurL.Value
+}
+sliderDurL.OnEvent("Change", UpdateDurL_S)
+
+UpdateDurR_S(*) {
+    global R_ABUSE_DURATION := sliderDurR.Value * 1000
+    editDurR.Value := sliderDurR.Value
+}
+sliderDurR.OnEvent("Change", UpdateDurR_S)
+
+UpdateDcTimeL_S(*) {
+    global L_DOUBLE_CLICK_TIME := sliderDcTimeL.Value
+    editDcTimeL.Value := sliderDcTimeL.Value
+}
+sliderDcTimeL.OnEvent("Change", UpdateDcTimeL_S)
+
+UpdateDcTimeR_S(*) {
+    global R_DOUBLE_CLICK_TIME := sliderDcTimeR.Value
+    editDcTimeR.Value := sliderDcTimeR.Value
+}
+sliderDcTimeR.OnEvent("Change", UpdateDcTimeR_S)
+
+UpdateL_E(*) {
+    if IsNumber(editL.Value) && Number(editL.Value) >= 0 && Number(editL.Value) <= 100 {
+        global DOUBLE_CHANCE_L := Number(editL.Value)
+        sliderL.Value := DOUBLE_CHANCE_L
+    }
+}
+editL.OnEvent("Change", UpdateL_E)
+
+UpdateR_E(*) {
+    if IsNumber(editR.Value) && Number(editR.Value) >= 0 && Number(editR.Value) <= 100 {
+        global DOUBLE_CHANCE_R := Number(editR.Value)
+        sliderR.Value := DOUBLE_CHANCE_R
+    }
+}
+editR.OnEvent("Change", UpdateR_E)
+
+UpdateCpsL_E(*) {
+    if IsNumber(editCpsL.Value) && Number(editCpsL.Value) >= 1 && Number(editCpsL.Value) <= 20 {
+        global CPS_LIMIT_L := Number(editCpsL.Value)
+        sliderCpsL.Value := CPS_LIMIT_L
+    }
+}
+editCpsL.OnEvent("Change", UpdateCpsL_E)
+
+UpdateCpsR_E(*) {
+    if IsNumber(editCpsR.Value) && Number(editCpsR.Value) >= 1 && Number(editCpsR.Value) <= 20 {
+        global CPS_LIMIT_R := Number(editCpsR.Value)
+        sliderCpsR.Value := CPS_LIMIT_R
+    }
+}
+editCpsR.OnEvent("Change", UpdateCpsR_E)
+
+UpdateDcTimeL_E(*) {
+    if IsNumber(editDcTimeL.Value) && Number(editDcTimeL.Value) >= 50 && Number(editDcTimeL.Value) <= 500 {
+        global L_DOUBLE_CLICK_TIME := Number(editDcTimeL.Value)
+        sliderDcTimeL.Value := L_DOUBLE_CLICK_TIME
+    }
+}
+editDcTimeL.OnEvent("Change", UpdateDcTimeL_E)
+
+UpdateDcTimeR_E(*) {
+    if IsNumber(editDcTimeR.Value) && Number(editDcTimeR.Value) >= 50 && Number(editDcTimeR.Value) <= 500 {
+        global R_DOUBLE_CLICK_TIME := Number(editDcTimeR.Value)
+        sliderDcTimeR.Value := R_DOUBLE_CLICK_TIME
+    }
+}
+editDcTimeR.OnEvent("Change", UpdateDcTimeR_E)
+
+; --- Speed slider/edit sync (maps to CLICK_INTERVAL_MIN/MAX) ---
+UpdateSpeedL_S(*) {
+    global L_ABUSE_SPEED := sliderSpeedL.Value
+    global L_CLICK_INTERVAL_MIN := Round(25 - 0.10 * L_ABUSE_SPEED)
+    global L_CLICK_INTERVAL_MAX := Round(45 - 0.20 * L_ABUSE_SPEED)
+    editSpeedL.Value := L_ABUSE_SPEED
+}
+sliderSpeedL.OnEvent("Change", UpdateSpeedL_S)
+
+UpdateSpeedR_S(*) {
+    global R_ABUSE_SPEED := sliderSpeedR.Value
+    global R_CLICK_INTERVAL_MIN := Round(25 - 0.10 * R_ABUSE_SPEED)
+    global R_CLICK_INTERVAL_MAX := Round(45 - 0.20 * R_ABUSE_SPEED)
+    editSpeedR.Value := R_ABUSE_SPEED
+}
+sliderSpeedR.OnEvent("Change", UpdateSpeedR_S)
+
+UpdateSpeedL_E(*) {
+    if IsNumber(editSpeedL.Value) && Number(editSpeedL.Value) >= 0 && Number(editSpeedL.Value) <= 100 {
+        global L_ABUSE_SPEED := Number(editSpeedL.Value)
+        global L_CLICK_INTERVAL_MIN := Round(25 - 0.10 * L_ABUSE_SPEED)
+        global L_CLICK_INTERVAL_MAX := Round(45 - 0.20 * L_ABUSE_SPEED)
+        sliderSpeedL.Value := L_ABUSE_SPEED
+    }
+}
+editSpeedL.OnEvent("Change", UpdateSpeedL_E)
+
+UpdateSpeedR_E(*) {
+    if IsNumber(editSpeedR.Value) && Number(editSpeedR.Value) >= 0 && Number(editSpeedR.Value) <= 100 {
+        global R_ABUSE_SPEED := Number(editSpeedR.Value)
+        global R_CLICK_INTERVAL_MIN := Round(25 - 0.10 * R_ABUSE_SPEED)
+        global R_CLICK_INTERVAL_MAX := Round(45 - 0.20 * R_ABUSE_SPEED)
+        sliderSpeedR.Value := R_ABUSE_SPEED
+    }
+}
+editSpeedR.OnEvent("Change", UpdateSpeedR_E)
+
+; --- Trigger key capture (click the box) ---
+editTriggerL.OnEvent("Focus", (*) => StartCapture("L"))
+editTriggerR.OnEvent("Focus", (*) => StartCapture("R"))
+btnTriggerResetL.OnEvent("Click", (*) => ResetTrigger("L"))
+btnTriggerResetR.OnEvent("Click", (*) => ResetTrigger("R"))
+
+; ==============================
+; ===== LOGIC: LEFT CLICK ======
+; ==============================
+
+; #InputLevel 1 = only REAL physical clicks trigger these hotkeys.
+; Synthetic Click commands from Abuse Mode (SendLevel 0) are ignored,
+; so L_mouseDown is not set back to true by our own clicks.
+#InputLevel 1
+
+*~LButton::
+{
+    global clickTimesL, CPS_LIMIT_L, DOUBLE_CHANCE_L, enableL, L_lastClickTime
+    global L_DOUBLE_CLICK_TIME, L_HOLD_THRESHOLD, L_abuseRunning, abuseEnableL, L_mouseDown
+    L_mouseDown := true
+    now := A_TickCount
+    if (abuseEnableL && (now - L_lastClickTime <= L_DOUBLE_CLICK_TIME)) {
+        startHold := A_TickCount
+        while L_mouseDown {
+            if (A_TickCount - startHold >= L_HOLD_THRESHOLD) {
+                if !L_abuseRunning
+                    StartAbuse_L()
+                return
+            }
+            Sleep 1
+        }
+    }
+    L_lastClickTime := now
+    if (enableL && !L_abuseRunning) {
+        clickTimesL.Push(now)
+        while (clickTimesL.Length && now - clickTimesL[1] > 1000)
+            clickTimesL.RemoveAt(1)
+        if (clickTimesL.Length > CPS_LIMIT_L && Random(1,100) <= DOUBLE_CHANCE_L) {
+            Sleep 15
+            Click "Left"
+        }
+    }
+}
+
+*~LButton Up::
+{
+    global L_mouseDown := false
+}
+
+; ==============================
+; ===== LOGIC: RIGHT CLICK =====
+; ==============================
+
+*~RButton::
+{
+    global clickTimesR, CPS_LIMIT_R, DOUBLE_CHANCE_R, enableR, R_lastClickTime
+    global R_DOUBLE_CLICK_TIME, R_HOLD_THRESHOLD, R_abuseRunning, abuseEnableR, R_mouseDown
+    R_mouseDown := true
+    now := A_TickCount
+    if (abuseEnableR && (now - R_lastClickTime <= R_DOUBLE_CLICK_TIME)) {
+        startHold := A_TickCount
+        while R_mouseDown {
+            if (A_TickCount - startHold >= R_HOLD_THRESHOLD) {
+                if !R_abuseRunning
+                    StartAbuse_R()
+                return
+            }
+            Sleep 1
+        }
+    }
+    R_lastClickTime := now
+    if (enableR && !R_abuseRunning) {
+        clickTimesR.Push(now)
+        while (clickTimesR.Length && now - clickTimesR[1] > 1000)
+            clickTimesR.RemoveAt(1)
+        if (clickTimesR.Length > CPS_LIMIT_R && Random(1,100) <= DOUBLE_CHANCE_R) {
+            Sleep 15
+            Click "Right"
+            Sleep 10
+        }
+    }
+}
+
+*~RButton Up::
+{
+    global R_mouseDown := false
+}
+
+#InputLevel 0
+
+; ==============================
+; ===== TRIGGER KEY CAPTURE ====
+; ==============================
+; Clicking the "Trigger" box starts capture mode: the next
+; key pressed (including mouse side buttons) becomes the abuse trigger.
+; While that key/button is held down, the corresponding
+; abuse mode runs directly - independent of double-click+hold.
+
+StartCapture(side) {
+    global capturingFor, CaptureCandidates, editTriggerL, editTriggerR
+    capturingFor := side
+    if (side = "L")
+        editTriggerL.Value := "Press a key..."
+    else
+        editTriggerR.Value := "Press a key..."
+    for key in CaptureCandidates {
+        try Hotkey("*" key, OnCaptureKey, "On")
+    }
+}
+
+OnCaptureKey(ThisHotkey, *) {
+    global capturingFor, CaptureCandidates
+    key := SubStr(ThisHotkey, 2) ; "*" entfernen
+    for k in CaptureCandidates {
+        try Hotkey("*" k, "Off")
+    }
+    side := capturingFor
+    capturingFor := ""
+    if (side = "L")
+        SetTriggerKey("L", key)
+    else if (side = "R")
+        SetTriggerKey("R", key)
+}
+
+SetTriggerKey(side, key) {
+    global L_triggerKey, R_triggerKey, editTriggerL, editTriggerR
+    ; If the key is already assigned to the other side, remove it there
+    if (side = "L" && R_triggerKey = key)
+        ResetTrigger("R")
+    else if (side = "R" && L_triggerKey = key)
+        ResetTrigger("L")
+
+    if (side = "L") {
+        if (L_triggerKey != "") {
+            try Hotkey("*" L_triggerKey, "Off")
+            try Hotkey("*" L_triggerKey " Up", "Off")
+        }
+        L_triggerKey := key
+        editTriggerL.Value := key
+        try Hotkey("*" key, TriggerL_Down, "On")
+        try Hotkey("*" key " Up", TriggerL_Up, "On")
+    } else {
+        if (R_triggerKey != "") {
+            try Hotkey("*" R_triggerKey, "Off")
+            try Hotkey("*" R_triggerKey " Up", "Off")
+        }
+        R_triggerKey := key
+        editTriggerR.Value := key
+        try Hotkey("*" key, TriggerR_Down, "On")
+        try Hotkey("*" key " Up", TriggerR_Up, "On")
+    }
+}
+
+ResetTrigger(side) {
+    global L_triggerKey, R_triggerKey, L_keyHeld, R_keyHeld, editTriggerL, editTriggerR
+    if (side = "L") {
+        if (L_triggerKey != "") {
+            try Hotkey("*" L_triggerKey, "Off")
+            try Hotkey("*" L_triggerKey " Up", "Off")
+        }
+        L_triggerKey := ""
+        L_keyHeld := false
+        editTriggerL.Value := "Keine"
+    } else {
+        if (R_triggerKey != "") {
+            try Hotkey("*" R_triggerKey, "Off")
+            try Hotkey("*" R_triggerKey " Up", "Off")
+        }
+        R_triggerKey := ""
+        R_keyHeld := false
+        editTriggerR.Value := "Keine"
+    }
+}
+
+TriggerL_Down(*) {
+    global L_keyHeld, L_abuseRunning
+    L_keyHeld := true
+    if !L_abuseRunning
+        StartAbuse_L()
+}
+
+TriggerL_Up(*) {
+    global L_keyHeld := false
+}
+
+TriggerR_Down(*) {
+    global R_keyHeld, R_abuseRunning
+    R_keyHeld := true
+    if !R_abuseRunning
+        StartAbuse_R()
+}
+
+TriggerR_Up(*) {
+    global R_keyHeld := false
+}
+
+; ==============================
+; ===== ABUSE FUNCTIONS ========
+; ==============================
+
+StartAbuse_L() {
+    global L_abuseRunning, L_ABUSE_DURATION, L_CLICK_INTERVAL_MIN, L_CLICK_INTERVAL_MAX, L_EXTRA_CLICK_CHANCE, L_mouseDown, L_keyHeld
+    L_abuseRunning := true
+    startTime := A_TickCount
+    while (L_mouseDown || L_keyHeld) && (A_TickCount - startTime < L_ABUSE_DURATION) {
+        Click "Left"
+        if (Random(1,100) <= L_EXTRA_CLICK_CHANCE) {
+            Sleep 15
+            Click "Left"
+        }
+        Sleep Random(L_CLICK_INTERVAL_MIN, L_CLICK_INTERVAL_MAX)
+    }
+    L_abuseRunning := false
+}
+
+StartAbuse_R() {
+    global R_abuseRunning, R_ABUSE_DURATION, R_CLICK_INTERVAL_MIN, R_CLICK_INTERVAL_MAX, R_EXTRA_CLICK_CHANCE, R_mouseDown, R_keyHeld
+    R_abuseRunning := true
+    startTime := A_TickCount
+    while (R_mouseDown || R_keyHeld) && (A_TickCount - startTime < R_ABUSE_DURATION) {
+        Click "Right"
+        if (Random(1,100) <= R_EXTRA_CLICK_CHANCE) {
+            Sleep 15
+            Click "Right"
+        }
+        Sleep Random(R_CLICK_INTERVAL_MIN, R_CLICK_INTERVAL_MAX)
+    }
+    R_abuseRunning := false
+}
+
+overlay.OnEvent("Close", (*) => ExitApp())
+
+; ==============================
+; ===== LOGIC: GODBRIDGING =====
+; ==============================
+
+GBSleep(ms) {
+    global gbRunning
+    Sleep(ms)
+    if (!gbRunning)
+        Exit() 
+}
+
+StopGodbridging(ThisHotkey) {
+    global gbRunning := false
+    Send "{a up}" 
+    Send "{s up}"
+    Send "{shift up}"
+    Send "{Space up}"
+    Click "right up"
+}
+
+RunGodbridging(ThisHotkey) {
+    global gbRunning
+    if (gbRunning)
+        return
+    
+    gbRunning := true
+    SetMouseDelay -1
+
+    Send "{a down}"
+    Send "{s down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 175
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 140
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 15                        ; 2
+    Send "{Space down}"
+    GBSleep 60
+    Send "{Space up}"
+    GBSleep 30
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    send "{shift down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 300
+
+    Send "{a up}"
+    Send "{s up}"
+    GBSleep 300
+    send "{shift up}"
+    GBSleep 100
+    Send "{a down}"
+    Send "{s down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    GBSleep 175
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 140
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 15                  ; 3
+    Send "{Space down}"
+    GBSleep 60
+    Send "{Space up}"
+    GBSleep 30
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    send "{shift down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 300
+
+    Send "{a up}"
+    Send "{s up}"
+    GBSleep 300
+    send "{shift up}"
+    GBSleep 100
+    Send "{a down}"
+    Send "{s down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    GBSleep 175
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 140
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 15                  ; 4
+    Send "{Space down}"
+    GBSleep 60
+    Send "{Space up}"
+    GBSleep 30
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    send "{shift down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 300
+
+    Send "{a up}"
+    Send "{s up}"
+    GBSleep 300
+    send "{shift up}"
+    GBSleep 100
+    Send "{a down}"
+    Send "{s down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    GBSleep 175
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 140
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 15                  ; 5
+    Send "{Space down}"
+    GBSleep 60
+    Send "{Space up}"
+    GBSleep 30
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    send "{shift down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 300
+
+    Send "{a up}"
+    Send "{s up}"
+    GBSleep 300
+    send "{shift up}"
+    GBSleep 100
+    Send "{a down}"
+    Send "{s down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    GBSleep 175
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 140
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 130
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 30
+    Send "{Space down}"
+    GBSleep 60
+    Send "{Space up}"
+    GBSleep 30
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    send "{shift down}"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+    
+    Click "right down"
+    GBSleep 35
+    Click "right up"
+
+    GBSleep 250
+
+    Send "{a up}"
+    Send "{s up}"
+    GBSleep 250
+    send "{shift up}"
+    
+    gbRunning := false
+}
