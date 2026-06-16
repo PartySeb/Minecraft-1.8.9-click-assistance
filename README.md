@@ -31,9 +31,8 @@ This is a small click assistant for Minecraft PvP 1.8.9. It helps with abusing a
   - 100% = 40–50 CPS
   - Controls how many clicks are generated.
 
-### Trigger
 
-- If you cannot activate Abuse Mode with a double click, you can assign a keybind instead.
+- Trigger - If you cannot activate Abuse Mode with a double click, you can assign a keybind instead.
 
 ### Right Abuse
 
